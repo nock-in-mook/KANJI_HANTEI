@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+
+# 環境変数・秘密情報
+.env
+.env.local
+*.key
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ビルド・キャッシュ
+dist/
+build/
+*.egg-info/
+.cache/
+
+# ログ・一時ファイル
+*.log
+tmp/
+temp/
+
+# 生成ファイル
+qr_tunnel.png
