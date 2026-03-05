@@ -1,23 +1,32 @@
 # HANDOFF - 漢字判定プロジェクト
 
 ## 現在の状況
-- Streamlit + PaddleOCR(2.9.1) + Gemini 2.5 Flash-Lite で漢字判定Webアプリが動作中
-- PaddleOCR（日本語+中国語デュアルモデル）がメイン、Geminiはフォールバック
-- 教育漢字DB 1026字（学年別）+ 類似漢字マッピング 308字を実装済み
-- Cloudflare Tunnel経由でスマホアクセス可能
+- アプリ（印刷モード + 指で書くモード）は動作する状態
+- PaddleOCR 2.9.1 + Gemini 2.5 Flash の二段構えOCR
+- thinking_budget=0 で全Gemini呼び出しを高速化済み
+- ベンチマーク2種完了（ゴシック体 / Zen Kurenaido+斜め）
+- 全変更をGitHubにプッシュ済み（4コミット）
 
-## 技術スタック
-- Python 3.10 / Streamlit / PaddleOCR 2.9.1 / PaddlePaddle 2.6.2
-- google-genai（Gemini 2.5 Flash-Lite）
-- Cloudflare Tunnel（スマホアクセス用）
+## ベンチマーク結果
+| フォント | PaddleOCR | Gemini Flash |
+|---------|-----------|-------------|
+| ゴシック体 | 96.8% | 99.1% |
+| Zen+斜め | 86.7% | 99.1% |
 
-## 主要ファイル
-- `app.py` — Streamlit UI（短冊選択→漢字選択→結果表示の3ステップ）
-- `kanji_ocr.py` — OCRコアモジュール（デュアルモデル + Geminiフォールバック）
-- `education_kanji.py` — 教育漢字DB + 類似漢字マッピング
-- `tunnel_with_qr.py` — Cloudflareトンネル起動
+- Geminiは手書き風フォントでも精度変わらず
+- PaddleOCRは簡体字変換が最大の弱点（日本式字形→中国式字形）
+- 畳は教育漢字外なのでベンチマーク対象外
 
-## 次のアクション
-- 類似漢字マッピングのブラッシュアップ（バックグラウンドで実行中）
-- Geminiモデル比較テスト（Flash-Lite vs Flash）
-- 漢字書き順アプリとの連携機能
+## パッケージ注意
+- typing_extensions のアップグレードで全壊した前例あり
+- paddlepaddle==2.6.2 + paddleocr==2.9.1 + numpy<2.0.0 で固定すること
+- requirements.txt に記載済み
+
+## グローバル設定変更
+- CLAUDE.md に Git自動コミット + 自動プッシュルールを追加
+- 大きな変更前にブランチ確認ルールも追加
+
+## 次のアクション候補
+- 図・皿の類似漢字マッピング追加（両エンジンで誤認する2字の救済）
+- Streamlit再起動してスマホテスト
+- 書き順アプリとの連携機能
