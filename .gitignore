@@ -32,3 +32,7 @@ temp/
 
 # 生成ファイル
 qr_tunnel.png
+
+# Claude Code Remote
+remote_bat*.bat
+remote_start*.sh
