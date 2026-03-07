@@ -59,12 +59,13 @@ st.title("\U0001f4dd 漢字判定")
 
 # --- モード切り替え ---
 mode = st.radio(
-    "モード",
-    ["\U0001f4d6 印刷", "\U0001f58a\ufe0f 指で書く"],
+    "\u30e2\u30fc\u30c9",
+    ["\U0001f4d6 \u5370\u5237", "\U0001f4f7 \u56f2\u3093\u3067\u9078\u3076", "\U0001f58a\ufe0f \u6307\u3067\u66f8\u304f"],
     horizontal=True,
     label_visibility="collapsed",
 )
-is_canvas = "指で書く" in mode
+is_canvas = "\u6307\u3067\u66f8\u304f" in mode
+is_crop = "\u56f2\u3093\u3067\u9078\u3076" in mode
 
 # ==========================================
 # 指で書くモード（Canvas → Gemini）
@@ -137,6 +138,138 @@ if is_canvas:
                 if st.button(label, key=f"cv_kanji_{i}", use_container_width=True):
                     st.session_state.selected_kanji = kanji
                     st.rerun()
+
+    st.stop()
+
+# ==========================================
+# 囲んで選ぶモード（写真 → 四角で囲む → Gemini）
+# ==========================================
+if is_crop:
+    selected_kanji = st.session_state.get("selected_kanji", None)
+    crop_candidates = st.session_state.get("crop_candidates", None)
+
+    # 漢字選択済み → 結果表示
+    if selected_kanji is not None:
+        st.success(f"\u2705 \u9078\u629e\u3055\u308c\u305f\u6f22\u5b57: **{selected_kanji}**")
+        st.info("\U0001f4dd \u66f8\u304d\u9806\u30a2\u30d7\u30ea\u306b\u9023\u643a\u3059\u308b\u6a5f\u80fd\u306f\u958b\u767a\u4e2d\u3067\u3059")
+        if st.button("\U0001f504 \u6700\u521d\u304b\u3089\u3084\u308a\u76f4\u3059", use_container_width=True):
+            st.session_state.pop("selected_kanji", None)
+            st.session_state.pop("crop_candidates", None)
+            st.session_state.pop("crop_img", None)
+            st.session_state.upload_gen = st.session_state.get("upload_gen", 0) + 1
+            st.rerun()
+        st.stop()
+
+    # 候補表示中
+    if crop_candidates is not None:
+        st.subheader("\u3069\u306e\u6f22\u5b57\uff1f")
+        cols_per_row = min(len(crop_candidates), 4)
+        cols = st.columns(cols_per_row)
+        for i, kanji in enumerate(crop_candidates):
+            with cols[i % cols_per_row]:
+                grade = get_grade(kanji)
+                label = f"{kanji}\n({grade}\u5e74)" if grade else kanji
+                if st.button(label, key=f"crop_kanji_{i}", use_container_width=True):
+                    st.session_state.selected_kanji = kanji
+                    st.rerun()
+
+        if st.button("\U0001f519 \u56f2\u307f\u76f4\u3059", use_container_width=True):
+            st.session_state.pop("crop_candidates", None)
+            st.rerun()
+        st.stop()
+
+    # 画像アップロード
+    upload_gen = st.session_state.get("upload_gen", 0)
+    crop_img_data = st.file_uploader(
+        "\U0001f4f7 \u30bf\u30c3\u30d7\u3057\u3066\u6f22\u5b57\u3092\u64ae\u5f71",
+        type=["png", "jpg", "jpeg", "webp"],
+        key=f"crop_uploader_{upload_gen}",
+    )
+
+    if crop_img_data is None:
+        st.info("\U0001f446 \u30bf\u30c3\u30d7\u3057\u3066\u6f22\u5b57\u3092\u64ae\u5f71\u3057\u3066\u304f\u3060\u3055\u3044")
+        st.stop()
+
+    # 画像読み込み・EXIF補正
+    pil_img = fix_exif_rotation(Image.open(crop_img_data))
+    img_rgb = pil_img.convert("RGB")
+
+    # Canvas表示サイズを計算（幅を画面に合わせる）
+    canvas_w = 350
+    orig_w, orig_h = img_rgb.size
+    scale = canvas_w / orig_w
+    canvas_h = int(orig_h * scale)
+    # 高さが大きすぎたら縮小
+    if canvas_h > 600:
+        canvas_h = 600
+        scale = min(canvas_w / orig_w, canvas_h / orig_h)
+        canvas_w = int(orig_w * scale)
+        canvas_h = int(orig_h * scale)
+
+    display_img = img_rgb.resize((canvas_w, canvas_h), Image.LANCZOS)
+
+    st.caption("\U0001f447 \u6f22\u5b57\u306e\u3042\u305f\u308a\u3092\u6307\u3067\u56f2\u3093\u3067\u304f\u3060\u3055\u3044")
+
+    canvas_result = st_canvas(
+        fill_color="rgba(255, 100, 100, 0.2)",
+        stroke_width=3,
+        stroke_color="#FF0000",
+        background_image=display_img,
+        width=canvas_w,
+        height=canvas_h,
+        drawing_mode="rect",
+        key="crop_canvas",
+    )
+
+    if st.button("\U0001f50d \u3053\u306e\u6f22\u5b57\u3092\u5224\u5b9a", use_container_width=True):
+        # 描画された四角形を取得
+        rects = []
+        if canvas_result.json_data and canvas_result.json_data.get("objects"):
+            for obj in canvas_result.json_data["objects"]:
+                if obj.get("type") == "rect":
+                    rects.append(obj)
+
+        if not rects:
+            st.warning("\u307e\u305a\u6f22\u5b57\u306e\u3042\u305f\u308a\u3092\u56db\u89d2\u3067\u56f2\u3093\u3067\u304f\u3060\u3055\u3044")
+            st.stop()
+
+        # 最後に描いた四角形を使用
+        rect = rects[-1]
+        # Canvas座標 → 元画像座標に変換
+        rx = rect["left"] / scale
+        ry = rect["top"] / scale
+        rw = (rect["width"] * rect.get("scaleX", 1)) / scale
+        rh = (rect["height"] * rect.get("scaleY", 1)) / scale
+
+        # 切り出し範囲をクリップ
+        x1 = max(0, int(rx))
+        y1 = max(0, int(ry))
+        x2 = min(orig_w, int(rx + rw))
+        y2 = min(orig_h, int(ry + rh))
+
+        if x2 - x1 < 10 or y2 - y1 < 10:
+            st.warning("\u56f2\u307f\u304c\u5c0f\u3055\u3059\u304e\u307e\u3059\u3002\u3082\u3046\u5c11\u3057\u5927\u304d\u304f\u56f2\u3093\u3067\u304f\u3060\u3055\u3044")
+            st.stop()
+
+        # 元画像から切り出し
+        img_array = np.array(img_rgb)
+        cropped = img_array[y1:y2, x1:x2]
+
+        st.image(cropped, caption="\u56f2\u3093\u3060\u90e8\u5206", use_container_width=True)
+
+        with st.spinner("\u6f22\u5b57\u3092\u5224\u5b9a\u3057\u3066\u3044\u307e\u3059..."):
+            try:
+                kanji_list = gemini_read_kanji(cropped)
+            except Exception as e:
+                st.error(f"\u30a8\u30e9\u30fc\u304c\u767a\u751f\u3057\u307e\u3057\u305f: {e}")
+                st.stop()
+
+        if not kanji_list:
+            st.warning("\u6f22\u5b57\u3092\u5224\u5b9a\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f")
+            st.info("\U0001f4a1 \u3082\u3046\u5c11\u3057\u5927\u304d\u304f\u56f2\u3093\u3067\u307f\u3066\u304f\u3060\u3055\u3044")
+        else:
+            st.session_state.crop_candidates = kanji_list
+            st.rerun()
 
     st.stop()
 
